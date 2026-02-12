@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Project Specific
+.cache/
+runs/
+experiments/
+
+# Temporary / Debug Artifacts
+*.txt
+*.json
+!src/**/*.json
+!scripts/**/*.json
+!results/**/*.json
+!*.md
+!**/*.md
+debug_*.py
+inspect_*.py
+verify_*.py
+test_*.py
+simple_*.py
+check_*.py
+target_*.py
+trace_*.py
+tasks.csv
+
+# Agent/IDE Specific
+.agent/*
+!.agent/workflows/
+.agent_context/
+.gemini/

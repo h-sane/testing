@@ -1,0 +1,302 @@
+{
+  "timestamp": "2026-02-12T09:09:24.301907Z",
+  "execution_metrics": {
+    "total_entries": 1129,
+    "success_count": 182,
+    "fail_count": 947,
+    "success_rate": 16.12,
+    "by_method": {
+      "UNKNOWN": {
+        "total": 638,
+        "success": 62,
+        "fail": 576
+      },
+      "PLANNER": {
+        "total": 491,
+        "success": 120,
+        "fail": 371
+      }
+    },
+    "by_app": {
+      "UNKNOWN": {
+        "total": 989,
+        "success": 120,
+        "fail": 869
+      },
+      "Notepad": {
+        "total": 8,
+        "success": 8,
+        "fail": 0
+      },
+      "Calculator": {
+        "total": 8,
+        "success": 8,
+        "fail": 0
+      },
+      "VSCode": {
+        "total": 40,
+        "success": 16,
+        "fail": 24
+      },
+      "Chrome": {
+        "total": 34,
+        "success": 5,
+        "fail": 29
+      },
+      "Spotify": {
+        "total": 22,
+        "success": 9,
+        "fail": 13
+      },
+      "Excel": {
+        "total": 28,
+        "success": 16,
+        "fail": 12
+      }
+    },
+    "planner_count": 491,
+    "planner_details": [
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": false,
+        "timeout": false,
+        "recovery": 0
+      },
+      {
+        "steps": "?",
+        "success": null,
+        "timeout": false,
+        "recovery": 0
+      }
+    ]
+  },
+  "cache_stats": {
+    "brave": {
+      "element_count": 366,
+      "last_updated": "2026-02-12T09:08:35.505919Z"
+    },
+    "calculator": {
+      "element_count": 80,
+      "last_updated": "2026-02-12T09:02:59.811109Z"
+    },
+    "chrome": {
+      "element_count": 476,
+      "last_updated": "2026-02-12T09:04:06.532159Z"
+    },
+    "excel": {
+      "element_count": 303,
+      "last_updated": "2026-02-12T09:07:07.754452Z"
+    },
+    "notepad": {
+      "element_count": 354,
+      "last_updated": "2026-02-12T09:01:52.814557Z"
+    },
+    "vscode": {
+      "element_count": 9,
+      "last_updated": "2026-02-10T15:41:52.905245Z"
+    }
+  },
+  "verification_summary": {
+    "total": 98,
+    "success": 79,
+    "fail": 19
+  },
+  "log_sources": [
+    {
+      "path": "experiments\\proof_run_golden\\run_20260211_005516\\execution_log.jsonl",
+      "count": 30
+    },
+    {
+      "path": "experiments\\search_test_notepad\\run_20260210_231917\\execution_log.jsonl",
+      "count": 30
+    },
+    {
+      "path": "experiments\\search_test_notepad_v6_1\\run_20260211_004119\\execution_log.jsonl",
+      "count": 30
+    },
+    {
+      "path": "experiments\\search_test_notepad_v7\\run_20260211_004329\\execution_log.jsonl",
+      "count": 30
+    },
+    {
+      "path": "experiments\\stage1_rerun\\execution_log.jsonl",
+      "count": 491
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\EXP_20260210_000715_NOTEPAD_CALCULATOR\\execution_log.jsonl",
+      "count": 10
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\EXP_20260210_002210_NOTEPAD_CALCULATOR\\execution_log.jsonl",
+      "count": 6
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE2_AX_ONLY_CONTROL\\execution_log.jsonl",
+      "count": 40
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE2_CACHE_VALIDATION\\execution_log.jsonl",
+      "count": 40
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE2_DISCOVERY\\execution_log.jsonl",
+      "count": 40
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE2_DISCOVERY\\PHASE2_DISC\\execution_log.jsonl",
+      "count": 4
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE4_CACHE_VAL_20260210_210135\\run_20260210_210634\\execution_log.jsonl",
+      "count": 39
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE4_DISCOVERY_20260210_210135\\run_20260210_210135\\execution_log.jsonl",
+      "count": 76
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\PHASE4_DISCOVERY_20260210_211103\\run_20260210_211103\\execution_log.jsonl",
+      "count": 28
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\run_20260210_195646\\execution_log.jsonl",
+      "count": 6
+    },
+    {
+      "path": "experiments\\testing\\research_runs\\run_20260210_201511\\execution_log.jsonl",
+      "count": 10
+    },
+    {
+      "path": "runs\\run_20260212_134218\\execution_log.jsonl",
+      "count": 4
+    },
+    {
+      "path": "runs\\run_20260212_134347\\execution_log.jsonl",
+      "count": 4
+    },
+    {
+      "path": "runs\\run_20260212_134510\\execution_log.jsonl",
+      "count": 13
+    },
+    {
+      "path": "runs\\run_20260212_141010\\execution_log.jsonl",
+      "count": 64
+    },
+    {
+      "path": "runs\\run_20260212_142014\\execution_log.jsonl",
+      "count": 64
+    },
+    {
+      "path": "runs\\run_20260212_142923\\execution_log.jsonl",
+      "count": 70
+    }
+  ]
+}

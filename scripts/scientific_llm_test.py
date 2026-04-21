@@ -1,22 +1,25 @@
 # scripts/scientific_llm_test.py
 """
-Scientific Test Runner for LLM Orchestrator (Section 1-15 compliant).
+Scientific LLM Orchestrator Test Runner — Full Multi-App Suite.
 
-Generates ALL mandatory artifacts per the scientific execution rules:
-- execution_log.jsonl
-- full_execution_trace.jsonl
-- console.log, stdout.log, stderr.log
-- run_metadata.json, results.json
-- checksums.txt, validation_report.json
-- screenshots/
+Tests the complete pipeline: User NL instruction → LLM planning (Gemini/Claude)
+→ Step Executor → Cache/AX/Vision execution → Observation → LLM replan.
+
+This is the end-to-end test for the research paper.
+
+Generates scientific artifacts:
+  execution_log.jsonl, traces.json, results.json,
+  run_metadata.json, stdout.log, stderr.log,
+  checksums.txt, validation_report.json
 
 Usage:
-    python scripts/scientific_llm_test.py
+    python scripts/scientific_llm_test.py --apps Notepad Calculator
+    python scripts/scientific_llm_test.py --apps Notepad --max-tasks 5
+    python scripts/scientific_llm_test.py                 # all available apps
 """
 
 import sys
 import os
-import io
 import json
 import time
 import hashlib
@@ -27,7 +30,7 @@ import string
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Project root setup
+# Project root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -36,207 +39,182 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 # =============================================================================
-# RUN ID GENERATION (Section 2)
+# HIGH-LEVEL NATURAL LANGUAGE TASK DATASET
+# =============================================================================
+
+LLM_TASKS = {
+    "Notepad": [
+        # Single-step
+        "Open the File menu",
+        "Open the Edit menu",
+        "Open the Format menu",
+        "Open the View menu",
+        "Open the Help menu",
+        # Multi-step
+        "Create a new blank document",
+        "Open the Find dialog to search for text",
+        "Open the Replace dialog",
+        "Open the Go To Line dialog",
+        "Open the Font settings dialog",
+        # Complex workflows
+        "Type 'Hello World' into the document",
+        "Select all text in the document",
+        "Open the File menu and click Save As",
+        "Turn on word wrap from the Format menu",
+        "Open the About Notepad dialog from the Help menu",
+    ],
+    "Calculator": [
+        "Press the number five button",
+        "Press the addition button",
+        "Press the number three button",
+        "Press the equals button",
+        "Press the Clear button to reset",
+        "Calculate seven times eight",
+        "Calculate one hundred divided by four",
+        "Find the square root of sixteen",
+        "Calculate 42 plus 58 and get the result",
+        "Subtract 17 from 50",
+        "Use the backspace to delete the last digit",
+        "Switch to Scientific calculator mode",
+        "Switch to Programmer calculator mode",
+        "Store the current value in memory",
+        "Recall the value from memory",
+    ],
+    "Chrome": [
+        "Open a new tab",
+        "Close the current tab",
+        "Open Chrome settings",
+        "Open the browsing history page",
+        "Open the downloads page",
+        "Open the bookmarks manager",
+        "Focus the address bar so I can type a URL",
+        "Go back to the previous page",
+        "Refresh the current page",
+        "Zoom in on the page",
+        "Open a new incognito window",
+        "Open the developer tools",
+    ],
+    "Brave": [
+        "Open a new tab",
+        "Close the current tab",
+        "Open Brave settings",
+        "Open browsing history",
+        "Open the downloads page",
+        "Open bookmarks",
+        "Focus the address bar",
+        "Go back to the previous page",
+        "Go forward to the next page",
+        "Refresh this page",
+        "Open a private browsing window",
+    ],
+    "Excel": [
+        "Open the File menu",
+        "Create a new blank workbook",
+        "Open the Save As dialog",
+        "Print the current spreadsheet",
+        "Undo the last action",
+        "Redo the last undone action",
+        "Cut the selected cells",
+        "Copy the selected cells",
+        "Paste from clipboard",
+        "Insert a new row",
+        "Insert a new column",
+        "Delete the current row",
+        "Delete the current column",
+        "Open a workbook from disk",
+        "Save the current workbook",
+    ],
+    "Windsurf": [
+        "Open the File menu",
+        "Open the Edit menu",
+        "Open the View menu",
+        "Toggle the sidebar visibility",
+        "Open the Command Palette",
+        "Create a new file",
+        "Open a folder in the editor",
+        "Save the current file",
+        "Save all open files",
+        "Open the Extensions panel",
+        "Open the Settings page",
+        "Toggle the integrated terminal",
+    ],
+    "Spotify": [
+        "Go to the Home page",
+        "Open the Search page",
+        "Open my Library",
+        "Open the playback queue",
+        "Play the current track",
+        "Pause the music",
+        "Skip to the next track",
+        "Go back to the previous track",
+        "Like the current song",
+        "Toggle shuffle mode",
+        "Toggle repeat mode",
+        "Turn the volume up",
+        "Turn the volume down",
+        "Mute the audio",
+        "Open Spotify Settings",
+    ],
+}
+
+
+# =============================================================================
+# HELPERS
 # =============================================================================
 
 def generate_run_id() -> str:
-    """Generate unique run ID: RUN_YYYYMMDD_HHMMSS_XXXX"""
     now = datetime.now()
     suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    return f"RUN_{now.strftime('%Y%m%d_%H%M%S')}_{suffix}"
+    return f"LLM_{now.strftime('%Y%m%d_%H%M%S')}_{suffix}"
 
 
-# =============================================================================
-# STREAM TEES (Section 5, 8)
-# =============================================================================
-
-class StreamTee:
-    """Tee stdout/stderr to both console and file."""
-    def __init__(self, stream, log_file):
-        self.stream = stream
-        self.log_file = log_file
-    
+class Tee:
+    """Tee stdout/stderr to console + file."""
+    def __init__(self, original, *log_files):
+        self.original = original
+        self.log_files = log_files
     def write(self, data):
-        self.stream.write(data)
-        self.stream.flush()
-        self.log_file.write(data)
-        self.log_file.flush()
-    
+        self.original.write(data)
+        self.original.flush()
+        for f in self.log_files:
+            f.write(data)
+            f.flush()
     def flush(self):
-        self.stream.flush()
-        self.log_file.flush()
-    
+        self.original.flush()
+        for f in self.log_files:
+            f.flush()
     def fileno(self):
-        return self.stream.fileno()
+        return self.original.fileno()
 
 
-# =============================================================================
-# TRACE LOGGER (Section 3, 4, 10)
-# =============================================================================
-
-class ScientificTraceLogger:
-    """Writes execution_log.jsonl and full_execution_trace.jsonl."""
-    
-    def __init__(self, run_dir: Path, run_id: str):
-        self.run_dir = run_dir
-        self.run_id = run_id
-        self.exec_log_path = run_dir / "execution_log.jsonl"
-        self.trace_log_path = run_dir / "full_execution_trace.jsonl"
-        self.exec_log_file = open(self.exec_log_path, "w", encoding="utf-8")
-        self.trace_log_file = open(self.trace_log_path, "w", encoding="utf-8")
-    
-    def log_execution(self, entry: dict):
-        """Write one execution_log entry (Section 3)."""
-        required_fields = {
-            "run_id": self.run_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "app_name": "",
-            "task": "",
-            "execution_method": "FAILED",
-            "success": False,
-            "plan_length": 0,
-            "steps_completed": 0,
-            "failure_step_index": -1,
-            "locator_score": 0.0,
-            "recovery_used": False,
-            "vision_used": False,
-            "llm_used": False,
-            "execution_time_ms": 0,
-        }
-        # Merge with provided, ensuring no nulls
-        for k, default_v in required_fields.items():
-            if k not in entry or entry[k] is None:
-                entry[k] = default_v
-        
-        self.exec_log_file.write(json.dumps(entry) + "\n")
-        self.exec_log_file.flush()
-    
-    def log_trace(self, event: dict):
-        """Write one trace event (Section 4)."""
-        required_fields = {
-            "run_id": self.run_id,
-            "event_type": "",
-            "component": "",
-            "action": "",
-            "input": "",
-            "output": "",
-            "success": False,
-            "error": "",
-            "latency_ms": 0,
-            "terminal_stdout_snippet": "",
-            "terminal_stderr_snippet": "",
-        }
-        for k, default_v in required_fields.items():
-            if k not in event or event[k] is None:
-                event[k] = default_v
-        
-        self.trace_log_file.write(json.dumps(event) + "\n")
-        self.trace_log_file.flush()
-    
-    def close(self):
-        self.exec_log_file.close()
-        self.trace_log_file.close()
-
-
-# =============================================================================
-# METADATA GENERATOR (Section 6)
-# =============================================================================
-
-def generate_metadata(run_id: str, config: dict) -> dict:
-    """Generate run_metadata.json (Section 6)."""
-    import subprocess
-    
+def generate_metadata(run_id, run_dir, apps, cfg):
+    import subprocess as sp
     git_commit = ""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT)
-        )
-        git_commit = result.stdout.strip()
+        r = sp.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=str(PROJECT_ROOT))
+        git_commit = r.stdout.strip()
     except:
         git_commit = "unknown"
-    
     return {
         "run_id": run_id,
+        "test_type": "LLM_ORCHESTRATOR",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
             "os": f"{platform.system()} {platform.release()}",
-            "python_version": platform.python_version(),
+            "python": platform.python_version(),
             "machine": platform.machine(),
-            "cpu": platform.processor(),
-            "ram": "unknown",  # Could use psutil if installed
         },
         "git_commit": git_commit,
-        "modules_used": ["locator", "execution_planner", "ax_executor", "vision_executor", "llm_client", "orchestrator", "step_executor"],
-        "llm_provider": config.get("llm_provider", "gemini"),
-        "vision_provider": config.get("vision_provider", "gemini_vlm"),
-        "cache_enabled": config.get("cache_enabled", True),
-        "vision_enabled": config.get("vision_enabled", True),
-        "llm_enabled": config.get("llm_enabled", True),
+        "apps_tested": apps,
+        "llm_providers": cfg.get("llm_providers", "gemini+claude"),
+        "cache_enabled": True,
+        "vision_enabled": cfg.get("vision_enabled", True),
+        "llm_enabled": True,
+        "max_steps_per_task": 15,
     }
 
 
-# =============================================================================
-# RESULTS GENERATOR (Section 7)
-# =============================================================================
-
-def generate_results(run_id: str, execution_log_path: Path) -> dict:
-    """Generate results.json from execution_log.jsonl (Section 7)."""
-    results = {
-        "run_id": run_id,
-        "total_tasks": 0,
-        "total_success": 0,
-        "total_failure": 0,
-        "success_rate": 0.0,
-        "by_method": {},
-        "by_application": {},
-    }
-    
-    entries = []
-    with open(execution_log_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                entries.append(json.loads(line))
-    
-    results["total_tasks"] = len(entries)
-    results["total_success"] = sum(1 for e in entries if e.get("success"))
-    results["total_failure"] = results["total_tasks"] - results["total_success"]
-    results["success_rate"] = round(
-        results["total_success"] / max(results["total_tasks"], 1), 4
-    )
-    
-    # By method
-    for e in entries:
-        method = e.get("execution_method", "UNKNOWN")
-        if method not in results["by_method"]:
-            results["by_method"][method] = {"total": 0, "success": 0, "failure": 0}
-        results["by_method"][method]["total"] += 1
-        if e.get("success"):
-            results["by_method"][method]["success"] += 1
-        else:
-            results["by_method"][method]["failure"] += 1
-    
-    # By application
-    for e in entries:
-        app = e.get("app_name", "UNKNOWN")
-        if app not in results["by_application"]:
-            results["by_application"][app] = {"total": 0, "success": 0, "failure": 0}
-        results["by_application"][app]["total"] += 1
-        if e.get("success"):
-            results["by_application"][app]["success"] += 1
-        else:
-            results["by_application"][app]["failure"] += 1
-    
-    return results
-
-
-# =============================================================================
-# CHECKSUM GENERATOR (Section 9)
-# =============================================================================
-
-def generate_checksums(run_dir: Path) -> str:
-    """Generate checksums.txt with SHA256 of all artifacts (Section 9)."""
+def generate_checksums(run_dir):
     lines = []
     for f in sorted(run_dir.iterdir()):
         if f.is_file() and f.name != "checksums.txt":
@@ -245,410 +223,401 @@ def generate_checksums(run_dir: Path) -> str:
     return "\n".join(lines)
 
 
-# =============================================================================
-# VALIDATION REPORT (Section 14)
-# =============================================================================
-
-def generate_validation_report(run_id: str, run_dir: Path) -> dict:
-    """Generate validation_report.json (Section 11, 14)."""
-    required_files = [
-        "execution_log.jsonl",
-        "full_execution_trace.jsonl",
-        "stdout.log",
-        "stderr.log",
-        "results.json",
-        "checksums.txt",
-    ]
-    
-    artifact_paths = {}
-    missing = []
-    for f in required_files:
-        fpath = run_dir / f
-        artifact_paths[f] = str(fpath)
-        if not fpath.exists() or fpath.stat().st_size == 0:
-            missing.append(f)
-    
-    # Check for at least one success
-    has_success = False
-    exec_log = run_dir / "execution_log.jsonl"
-    if exec_log.exists():
-        with open(exec_log, "r") as fh:
-            for line in fh:
-                if line.strip():
-                    entry = json.loads(line.strip())
-                    if entry.get("success"):
-                        has_success = True
-                        break
-    
-    if missing:
-        verdict = "INCOMPLETE"
-        evidence = [f"Missing artifacts: {', '.join(missing)}"]
-    elif has_success:
-        verdict = "VERIFIED"
-        evidence = ["All required artifacts present", "At least one successful execution found"]
-    else:
-        verdict = "FAILED"
-        evidence = ["All artifacts present but no successful execution found"]
-    
-    return {
+def build_results(run_id, all_traces):
+    """Build results.json from execution traces."""
+    results = {
         "run_id": run_id,
-        "module": "llm_orchestrator",
-        "verdict": verdict,
-        "artifact_paths": artifact_paths,
-        "evidence_lines": evidence,
+        "test_type": "LLM_ORCHESTRATOR",
+        "total_tasks": len(all_traces),
+        "total_success": 0,
+        "total_failure": 0,
+        "success_rate": 0.0,
+        "total_llm_calls": 0,
+        "total_steps": 0,
+        "avg_steps_per_task": 0.0,
+        "avg_latency_ms": 0.0,
+        "by_application": {},
+        "by_action_type": {},
+        "by_step_method": {},
+        "task_details": [],
     }
 
+    for t in all_traces:
+        app = t["app_name"]
+        success = t["success"]
+
+        if app not in results["by_application"]:
+            results["by_application"][app] = {
+                "total": 0, "success": 0, "failure": 0,
+                "llm_calls": 0, "total_steps": 0, "total_ms": 0,
+            }
+        ba = results["by_application"][app]
+        ba["total"] += 1
+        ba["llm_calls"] += t.get("llm_calls", 0)
+        ba["total_steps"] += t.get("num_steps", 0)
+        ba["total_ms"] += t.get("total_ms", 0)
+
+        if success:
+            results["total_success"] += 1
+            ba["success"] += 1
+        else:
+            results["total_failure"] += 1
+            ba["failure"] += 1
+
+        results["total_llm_calls"] += t.get("llm_calls", 0)
+        results["total_steps"] += t.get("num_steps", 0)
+
+        # By action type (CLICK, TYPE, HOTKEY, WAIT, DONE, FAIL)
+        for step in t.get("steps", []):
+            atype = step.get("action", {}).get("action_type", "UNKNOWN")
+            if atype not in results["by_action_type"]:
+                results["by_action_type"][atype] = {"total": 0, "success": 0, "failure": 0}
+            results["by_action_type"][atype]["total"] += 1
+            if step.get("result", {}).get("success"):
+                results["by_action_type"][atype]["success"] += 1
+            else:
+                results["by_action_type"][atype]["failure"] += 1
+
+        # By step method (CACHE_PLANNER, AX, VISION, TYPE, HOTKEY, etc.)
+        for step in t.get("steps", []):
+            method = step.get("result", {}).get("method", "UNKNOWN")
+            if method not in results["by_step_method"]:
+                results["by_step_method"][method] = {"total": 0, "success": 0, "failure": 0}
+            results["by_step_method"][method]["total"] += 1
+            if step.get("result", {}).get("success"):
+                results["by_step_method"][method]["success"] += 1
+            else:
+                results["by_step_method"][method]["failure"] += 1
+
+        results["task_details"].append({
+            "app": app,
+            "instruction": t["instruction"],
+            "success": success,
+            "steps": t.get("num_steps", 0),
+            "llm_calls": t.get("llm_calls", 0),
+            "total_ms": t.get("total_ms", 0),
+            "error": t.get("error", ""),
+            "methods_used": t.get("methods_used", []),
+        })
+
+    n = max(len(all_traces), 1)
+    results["success_rate"] = round(results["total_success"] / n, 4)
+    results["avg_steps_per_task"] = round(results["total_steps"] / n, 2)
+    total_ms = sum(t.get("total_ms", 0) for t in all_traces)
+    results["avg_latency_ms"] = round(total_ms / n, 1)
+
+    for app, ba in results["by_application"].items():
+        ba["success_rate"] = round(ba["success"] / max(ba["total"], 1), 4)
+        ba["avg_ms"] = round(ba["total_ms"] / max(ba["total"], 1), 1)
+
+    return results
+
 
 # =============================================================================
-# SCREENSHOT CAPTURE
+# ALSO WRITE execution_log.jsonl FOR CROSS-COMPATIBILITY
 # =============================================================================
 
-def capture_screenshot(run_dir: Path, step_num: int) -> str:
-    """Capture screenshot for a step."""
-    screenshots_dir = run_dir / "screenshots"
-    screenshots_dir.mkdir(exist_ok=True)
-    
-    path = screenshots_dir / f"step_{step_num:03d}.png"
-    try:
-        import pyautogui
-        img = pyautogui.screenshot()
-        img.save(str(path))
-        return str(path)
-    except Exception as e:
-        print(f"[screenshot] Failed: {e}")
-        return ""
+def write_execution_log(run_dir, run_id, all_traces):
+    """Write execution_log.jsonl (harness-compatible format)."""
+    path = run_dir / "execution_log.jsonl"
+    with open(path, "w", encoding="utf-8") as f:
+        for t in all_traces:
+            entry = {
+                "run_id": run_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "app_name": t["app_name"],
+                "task": t["instruction"],
+                "execution_method": "LLM_ORCHESTRATOR" if t["success"] else "FAILED",
+                "success": t["success"],
+                "llm_used": True,
+                "execution_time_ms": t.get("total_ms", 0),
+                "llm_calls": t.get("llm_calls", 0),
+                "steps": t.get("num_steps", 0),
+                "error": t.get("error", ""),
+            }
+            f.write(json.dumps(entry) + "\n")
 
 
 # =============================================================================
-# MAIN TEST
+# MAIN
 # =============================================================================
 
-TEST_TASKS = [
-    {
-        "instruction": "Click on the File menu",
-        "app_name": "Notepad",
-        "description": "Tests basic menu access via LLM planning"
-    },
-    {
-        "instruction": "Open the Edit menu",
-        "app_name": "Notepad",
-        "description": "Tests menu navigation"
-    },
-    {
-        "instruction": "Use keyboard shortcut Ctrl+N to create a new tab",
-        "app_name": "Notepad",
-        "description": "Tests HOTKEY action via LLM"
-    },
-]
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Scientific LLM Orchestrator Test")
+    parser.add_argument("--apps", nargs="+", default=None,
+                        help="Apps to test (default: all available)")
+    parser.add_argument(
+        "--include-vscode",
+        action="store_true",
+        help="Include VSCode in test apps (disabled by default for safety)",
+    )
+    parser.add_argument("--max-tasks", type=int, default=None,
+                        help="Max tasks per app")
+    parser.add_argument("--no-vision", action="store_true",
+                        help="Disable vision fallback in step executor")
+    parser.add_argument("--prefer-provider", default="gemini",
+                        choices=["gemini", "claude"],
+                        help="Preferred LLM provider (default: gemini)")
+    args = parser.parse_args()
 
-
-def run_test():
-    """Main scientific test execution."""
+    # --- Run directory ---
     run_id = generate_run_id()
     run_dir = PROJECT_ROOT / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    
-    # --- Section 8: Stream redirection ---
+
+    # --- Stream capture ---
     stdout_file = open(run_dir / "stdout.log", "w", encoding="utf-8")
     stderr_file = open(run_dir / "stderr.log", "w", encoding="utf-8")
-    console_file = open(run_dir / "console.log", "w", encoding="utf-8")
-    
     original_stdout = sys.stdout
     original_stderr = sys.stderr
-    
-    class ConsoleTee:
-        """Tee to both stdout and console.log."""
-        def __init__(self, original, log_file, console):
-            self.original = original
-            self.log_file = log_file
-            self.console = console
-        def write(self, data):
-            self.original.write(data)
-            self.original.flush()
-            self.log_file.write(data)
-            self.log_file.flush()
-            self.console.write(data)
-            self.console.flush()
-        def flush(self):
-            self.original.flush()
-            self.log_file.flush()
-            self.console.flush()
-        def fileno(self):
-            return self.original.fileno()
-    
-    sys.stdout = ConsoleTee(original_stdout, stdout_file, console_file)
-    sys.stderr = ConsoleTee(original_stderr, stderr_file, console_file)
-    
-    # Seed stderr so file is never 0 bytes (Section 8 compliance)
-    sys.stderr.write(f"[stderr] Scientific test run initialized\n")
-    
-    trace_logger = ScientificTraceLogger(run_dir, run_id)
-    
+    sys.stdout = Tee(original_stdout, stdout_file)
+    sys.stderr = Tee(original_stderr, stderr_file)
+    sys.stderr.write(f"[stderr] LLM test initialized: {run_id}\n")
+
+    all_traces = []
+
     print(f"{'='*70}")
-    print(f"SCIENTIFIC TEST RUN: {run_id}")
+    print(f"SCIENTIFIC LLM ORCHESTRATOR TEST: {run_id}")
     print(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    print(f"Provider preference: {args.prefer_provider}")
+    print(f"Vision: {'enabled' if not args.no_vision else 'disabled'}")
     print(f"Run Directory: {run_dir}")
     print(f"{'='*70}\n")
-    
+
     try:
-        # --- Launch Notepad ---
-        print("[SETUP] Launching Notepad...")
-        
-        trace_logger.log_trace({
-            "event_type": "SETUP",
-            "component": "test_harness",
-            "action": "launch_notepad",
-            "input": "notepad.exe",
-            "output": "",
-            "success": True,
-        })
-        
-        import subprocess
-        proc = subprocess.Popen(["notepad.exe"])
-        time.sleep(3)
-        
-        # --- Connect window ---
-        from pywinauto import Application
-        app = Application(backend="uia").connect(title_re=".*Notepad.*", visible_only=True, found_index=0)
-        window = app.top_window()
-        window.set_focus()
-        time.sleep(1)
-        
-        print(f"[SETUP] Connected to: {window.window_text()}")
-        print(f"[SETUP] Descendants: {len(window.descendants())}\n")
-        
-        trace_logger.log_trace({
-            "event_type": "SETUP",
-            "component": "test_harness",
-            "action": "connect_window",
-            "input": ".*Notepad.*",
-            "output": window.window_text(),
-            "success": True,
-        })
-        
-        # --- LLM health check ---
+        from src.harness import config as harness_config
+        from src.harness.app_controller import create_controller
+        from src.llm.orchestrator import Orchestrator
         from src.llm.llm_client import get_client
+
+        # --- LLM health check ---
         client = get_client()
         health = client.health_check()
-        print(f"[SETUP] LLM Health: {health}\n")
-        
-        trace_logger.log_trace({
-            "event_type": "HEALTH_CHECK",
-            "component": "llm_client",
-            "action": "health_check",
-            "input": "",
-            "output": json.dumps(health),
-            "success": health["gemini_available"] > 0 or health["claude_available"] > 0,
-        })
-        
-        # --- Execute test tasks ---
-        from src.llm.orchestrator import Orchestrator
-        orch = Orchestrator()
-        
-        for i, task in enumerate(TEST_TASKS, 1):
+        print(f"[llm] Key pool: {json.dumps(health)}")
+        if health["gemini_available"] == 0 and health["claude_available"] == 0:
+            print("[FATAL] No LLM API keys available. Aborting.")
+            return
+
+        # --- Determine apps ---
+        available = harness_config.get_available_apps()
+        if args.apps:
+            apps_to_test = [a for a in args.apps if a in available]
+        else:
+            # All available that have LLM tasks defined
+            apps_to_test = [a for a in available if a in LLM_TASKS]
+
+        if not args.include_vscode:
+            apps_to_test = [a for a in apps_to_test if a != "VSCode"]
+
+        print(f"[scientific] Testing apps: {apps_to_test}")
+        print(f"[scientific] Available apps: {available}\n")
+
+        orchestrator = Orchestrator()
+
+        for app_name in apps_to_test:
+            tasks = LLM_TASKS.get(app_name, [])
+            if not tasks:
+                print(f"[scientific] No LLM tasks for {app_name}, skipping")
+                continue
+            if args.max_tasks:
+                tasks = tasks[:args.max_tasks]
+
             print(f"\n{'='*70}")
-            print(f"TEST {i}/{len(TEST_TASKS)}: {task['instruction']}")
-            print(f"Description: {task['description']}")
-            print(f"{'='*70}\n")
-            
-            task_start = time.time()
-            
-            # Screenshot before
-            capture_screenshot(run_dir, i * 10)
-            
-            trace_logger.log_trace({
-                "event_type": "TASK_START",
-                "component": "orchestrator",
-                "action": "execute",
-                "input": task["instruction"],
-                "output": "",
-                "success": True,
-            })
-            
-            try:
-                trace = orch.execute(
-                    instruction=task["instruction"],
-                    window=window,
-                    app_name=task["app_name"],
-                )
-                
-                task_ms = int((time.time() - task_start) * 1000)
-                
-                # Screenshot after
-                capture_screenshot(run_dir, i * 10 + 1)
-                
-                # Log execution (Section 3)
-                trace_logger.log_execution({
-                    "run_id": run_id,
-                    "app_name": task["app_name"],
-                    "task": task["instruction"],
-                    "execution_method": "LLM_ORCHESTRATOR",
-                    "success": trace.success,
-                    "plan_length": len(trace.steps),
-                    "steps_completed": sum(1 for s in trace.steps if s.result.get("success")),
-                    "failure_step_index": next(
-                        (s.step_num for s in trace.steps if not s.result.get("success")), -1
-                    ),
-                    "locator_score": 0.0,
-                    "recovery_used": False,
-                    "vision_used": any(s.result.get("method") == "VISION" for s in trace.steps),
-                    "llm_used": True,
-                    "execution_time_ms": task_ms,
-                })
-                
-                # Log each step trace (Section 4)
-                for step in trace.steps:
-                    stdout_snippet = step.result.get("error", "")[:200]
-                    trace_logger.log_trace({
-                        "event_type": "STEP_EXECUTION",
-                        "component": step.action.get("action_type", "UNKNOWN"),
-                        "action": json.dumps(step.action),
-                        "input": step.thought,
-                        "output": json.dumps(step.result),
-                        "success": step.result.get("success", False),
-                        "error": step.result.get("error", ""),
-                        "latency_ms": step.latency_ms,
-                        "terminal_stdout_snippet": stdout_snippet,
-                        "terminal_stderr_snippet": "",
+            print(f"APP: {app_name} ({len(tasks)} tasks)")
+            print(f"{'='*70}")
+
+            app_config = harness_config.get_app_config(app_name)
+            controller = create_controller(app_name, app_config)
+
+            if not controller.start_or_connect():
+                print(f"[scientific] ERROR: Cannot start/connect {app_name}")
+                for task in tasks:
+                    all_traces.append({
+                        "app_name": app_name, "instruction": task,
+                        "success": False, "num_steps": 0, "llm_calls": 0,
+                        "total_ms": 0, "error": "App launch failed",
+                        "steps": [], "methods_used": [],
                     })
-                
-                status = "✅ SUCCESS" if trace.success else "❌ FAILED"
-                print(f"\n[RESULT] {status} | {task_ms}ms | {len(trace.steps)} steps | {trace.llm_calls} LLM calls")
-                if trace.error:
-                    print(f"[ERROR] {trace.error}")
-                
-            except Exception as e:
-                task_ms = int((time.time() - task_start) * 1000)
-                tb = traceback.format_exc()
-                print(f"[EXCEPTION] {e}")
-                print(f"[TRACEBACK]\n{tb}")
-                
-                trace_logger.log_execution({
-                    "run_id": run_id,
-                    "app_name": task["app_name"],
-                    "task": task["instruction"],
-                    "execution_method": "EXCEPTION",
-                    "success": False,
-                    "plan_length": 0,
-                    "steps_completed": 0,
-                    "failure_step_index": 0,
-                    "locator_score": 0.0,
-                    "recovery_used": False,
-                    "vision_used": False,
-                    "llm_used": True,
-                    "execution_time_ms": task_ms,
-                })
-                
-                trace_logger.log_trace({
-                    "event_type": "EXCEPTION",
-                    "component": "orchestrator",
-                    "action": task["instruction"],
-                    "input": "",
-                    "output": "",
-                    "success": False,
-                    "error": str(e),
-                    "latency_ms": task_ms,
-                    "terminal_stdout_snippet": "",
-                    "terminal_stderr_snippet": tb[:500],
-                })
-            
-            # ESC reset between tasks
+                continue
+
+            controller.focus()
+            time.sleep(1.0)
+
+            window = controller.get_window()
+            if not window:
+                print(f"[scientific] ERROR: No window for {app_name}")
+                for task in tasks:
+                    all_traces.append({
+                        "app_name": app_name, "instruction": task,
+                        "success": False, "num_steps": 0, "llm_calls": 0,
+                        "total_ms": 0, "error": "No window handle",
+                        "steps": [], "methods_used": [],
+                    })
+                continue
+
+            for i, task in enumerate(tasks):
+                print(f"\n--- [{app_name}] Task {i+1}/{len(tasks)}: {task} ---")
+
+                try:
+                    trace = orchestrator.execute(
+                        instruction=task,
+                        window=window,
+                        app_name=app_name,
+                    )
+
+                    # Collect unique methods used across steps
+                    methods = []
+                    for s in trace.steps:
+                        m = s.result.get("method", "UNKNOWN")
+                        if m not in methods:
+                            methods.append(m)
+
+                    # Serialize step data
+                    steps_data = []
+                    for s in trace.steps:
+                        steps_data.append({
+                            "step_num": s.step_num,
+                            "thought": s.thought,
+                            "action": s.action,
+                            "result": s.result,
+                            "latency_ms": s.latency_ms,
+                        })
+
+                    all_traces.append({
+                        "app_name": app_name,
+                        "instruction": task,
+                        "success": trace.success,
+                        "num_steps": len(trace.steps),
+                        "llm_calls": trace.llm_calls,
+                        "total_ms": trace.total_ms,
+                        "error": trace.error,
+                        "steps": steps_data,
+                        "methods_used": methods,
+                    })
+
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    print(f"[scientific] Task exception: {e}\n{tb}")
+                    all_traces.append({
+                        "app_name": app_name, "instruction": task,
+                        "success": False, "num_steps": 0, "llm_calls": 0,
+                        "total_ms": 0, "error": str(e),
+                        "steps": [], "methods_used": [],
+                    })
+
+                # Dismiss any dialogs and re-focus between tasks
+                time.sleep(0.8)
+                try:
+                    import pyautogui
+                    pyautogui.press("escape")
+                    time.sleep(0.3)
+                except:
+                    pass
+                try:
+                    controller.focus()
+                    time.sleep(0.3)
+                except:
+                    pass
+
+            # Kill app after all its tasks
             try:
-                window.type_keys("{ESC}{ESC}", pause=0.1)
-                time.sleep(0.5)
+                controller.terminate_app()
             except:
                 pass
-        
-        # --- Cleanup: Close Notepad ---
-        print("\n[CLEANUP] Closing Notepad...")
-        try:
-            proc.terminate()
-            proc.wait(timeout=5)
-        except:
-            try:
-                proc.kill()
-            except:
-                pass
-        
+            time.sleep(2.0)
+
     except Exception as e:
         tb = traceback.format_exc()
-        print(f"\n[FATAL] {e}")
-        print(f"[TRACEBACK]\n{tb}")
-        
-        trace_logger.log_trace({
-            "event_type": "FATAL_ERROR",
-            "component": "test_harness",
-            "action": "run_test",
-            "input": "",
-            "output": "",
-            "success": False,
-            "error": str(e),
-            "latency_ms": 0,
-            "terminal_stdout_snippet": "",
-            "terminal_stderr_snippet": tb[:500],
-        })
-    
+        print(f"\n[FATAL] {e}\n{tb}")
+
     finally:
-        # --- Close trace logger ---
-        trace_logger.close()
-        
-        # --- Section 6: Metadata ---
-        metadata = generate_metadata(run_id, {
-            "llm_provider": "gemini",
-            "vision_provider": "gemini_vlm",
-            "cache_enabled": True,
-            "vision_enabled": True,
-            "llm_enabled": True,
-        })
-        with open(run_dir / "run_metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
-        
-        # --- Section 7: Results ---
-        results = generate_results(run_id, run_dir / "execution_log.jsonl")
-        with open(run_dir / "results.json", "w") as f:
-            json.dump(results, f, indent=2)
-        
-        # --- all_logs.json (combined) ---
-        all_logs = {
-            "run_id": run_id,
-            "metadata": metadata,
-            "results": results,
-        }
-        with open(run_dir / "all_logs.json", "w") as f:
-            json.dump(all_logs, f, indent=2)
-        
         # --- Restore streams ---
         sys.stdout = original_stdout
         sys.stderr = original_stderr
         stdout_file.close()
         stderr_file.close()
-        console_file.close()
-        
-        # --- Section 9: Checksums ---
+
+        # --- results.json ---
+        results = build_results(run_id, all_traces)
+        with open(run_dir / "results.json", "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+
+        # --- traces.json (full step-level detail) ---
+        with open(run_dir / "traces.json", "w", encoding="utf-8") as f:
+            json.dump(all_traces, f, indent=2)
+
+        # --- execution_log.jsonl (harness-compatible) ---
+        write_execution_log(run_dir, run_id, all_traces)
+
+        # --- run_metadata.json ---
+        tested_apps = sorted(set(t["app_name"] for t in all_traces))
+        metadata = generate_metadata(run_id, run_dir, tested_apps, {
+            "vision_enabled": not args.no_vision if hasattr(args, "no_vision") else True,
+            "llm_providers": args.prefer_provider if hasattr(args, "prefer_provider") else "gemini",
+        })
+        with open(run_dir / "run_metadata.json", "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+
+        # --- checksums.txt ---
         checksums = generate_checksums(run_dir)
-        with open(run_dir / "checksums.txt", "w") as f:
+        with open(run_dir / "checksums.txt", "w", encoding="utf-8") as f:
             f.write(checksums)
-        
-        # --- Section 14: Validation report ---
-        report = generate_validation_report(run_id, run_dir)
-        with open(run_dir / "validation_report.json", "w") as f:
-            json.dump(report, f, indent=2)
-        
+
+        # --- validation_report.json ---
+        verdict = "VERIFIED" if results["total_success"] > 0 else "FAILED"
+        validation = {
+            "run_id": run_id,
+            "module": "llm_orchestrator",
+            "verdict": verdict,
+            "evidence_lines": [
+                f"Total: {results['total_tasks']} tasks across {len(tested_apps)} apps",
+                f"Success: {results['total_success']}/{results['total_tasks']} ({results['success_rate']*100:.1f}%)",
+                f"LLM calls: {results['total_llm_calls']}",
+                f"Avg steps/task: {results['avg_steps_per_task']}",
+                f"Avg latency: {results['avg_latency_ms']}ms/task",
+            ],
+        }
+        with open(run_dir / "validation_report.json", "w", encoding="utf-8") as f:
+            json.dump(validation, f, indent=2)
+
+        # --- Print summary ---
         print(f"\n{'='*70}")
-        print(f"RUN COMPLETE: {run_id}")
-        print(f"Verdict: {report['verdict']}")
-        print(f"Results: {results['total_success']}/{results['total_tasks']} success ({results['success_rate']*100:.1f}%)")
-        print(f"Artifacts: {run_dir}")
+        print(f"LLM ORCHESTRATOR TEST COMPLETE: {run_id}")
         print(f"{'='*70}")
-        
-        # Print evidence
-        for line in report.get("evidence_lines", []):
-            print(f"  → {line}")
-        
-        # Section 13: Reproducibility
-        print(f"\nReproducibility command:")
-        print(f"  python scripts/scientific_llm_test.py")
+        print(f"Total: {results['total_success']}/{results['total_tasks']} "
+              f"({results['success_rate']*100:.1f}%)")
+        print(f"LLM Calls: {results['total_llm_calls']}")
+        print(f"Steps: {results['total_steps']} "
+              f"(avg {results['avg_steps_per_task']}/task)")
+        print(f"Latency: avg {results['avg_latency_ms']}ms/task")
+        print()
+
+        print("Per-app breakdown:")
+        for app, ba in sorted(results["by_application"].items()):
+            rate = ba["success_rate"] * 100
+            print(f"  {app:15s}: {ba['success']}/{ba['total']} ({rate:.0f}%) | "
+                  f"LLM: {ba['llm_calls']} | avg {ba['avg_ms']:.0f}ms")
+        print()
+
+        if results["by_action_type"]:
+            print("Action types:")
+            for atype, ad in sorted(results["by_action_type"].items()):
+                print(f"  {atype:12s}: {ad['success']}/{ad['total']}")
+            print()
+
+        if results["by_step_method"]:
+            print("Step methods:")
+            for method, md in sorted(results["by_step_method"].items()):
+                print(f"  {method:18s}: {md['success']}/{md['total']}")
+            print()
+
+        print(f"Verdict: {verdict}")
+        print(f"Artifacts: {run_dir}")
+        print(f"\nReproduce:")
+        if tested_apps:
+            print(f"  python scripts/scientific_llm_test.py --apps {' '.join(tested_apps)}")
 
 
 if __name__ == "__main__":
-    run_test()
+    main()

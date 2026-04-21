@@ -1,0 +1,23 @@
+# Copilot Instructions
+
+- Purpose: Windows UI hybrid automation harness; tasks executed against desktop apps via cache-driven planner, accessibility actions, and vision fallback (see src/harness/main.py).
+- Primary flow: execute_task() runs CACHE→PLANNER→AX→VISION with verification; planner uses cached exposure paths, AX uses matcher scoring, vision uses VLM click fallback (src/harness/main.py, src/automation/execution_planner.py, src/harness/ax_executor.py, src/harness/vision_executor.py).
+- Config: target apps, exe paths, tasks, and keyboard menu fallbacks live in src/harness/config.py; update APPS/TASKS/KEYBOARD_FALLBACKS when adding apps.
+- Caching: element cache stored per-app in .cache/*.json via storage.add_element()/CacheSession (src/automation/storage.py); fingerprints and exposure paths are produced by builder/node_from_elem (src/automation/builder.py).
+- Discovery: populate caches before runs using the crawler UIProber via CLI flag --discover; it performs static snapshots plus interactive BFS with safety blacklists and content-boundary detection (src/automation/prober.py, run via python -m src.harness.main --discover --apps Notepad).
+- Matching: matcher.match_score() normalizes tokens (stopwords, numeric words) and scores tasks against cached elements; default auto execute threshold ≈0.82, verify band starts at 0.65 (src/automation/matcher.py, src/harness/ax_executor.py).
+- Planner execution: execution_planner.execute_with_self_healing() builds exposure-path plans from cache, validates start element, executes UIA pattern-aware actions, verifies child exposure, and can self-heal by rebuilding the tree and batch-writing cache updates (src/automation/execution_planner.py).
+- Locator: locate_element_by_fingerprint() searches descendants with weighted name/control-type/automation-id scoring and Desktop re-acquisition fallback for scope changes; recover_element() performs fuzzy recovery (src/harness/locator.py).
+- AX executor: find_and_execute() scans UIA tree, scores candidates, executes via Invoke/Expand/Select/click_input, caches successful elements, retries with keyboard menu fallbacks and optional rescan (src/harness/ax_executor.py).
+- Vision: vision_executor.detect_and_click() captures window screenshot, calls VLM provider, and clicks center of returned bbox; uses timeout and logs latency/screenshots to experiments/run_<id> (src/harness/vision_executor.py).
+- VLM providers: vlm_provider selects Gemini (GEMINI_API_KEY) or HF (HF_TOKEN); parses model text into bboxes; ensure these env vars are set via .env before running (src/harness/vlm_provider.py).
+- LLM orchestrator: src/llm/orchestrator.py runs a ReAct loop that plans JSON actions (CLICK/TYPE/HOTKEY/WAIT/DONE/FAIL) and dispatches them through step_executor (cache→AX→vision) (src/llm/step_executor.py).
+- Verification: verification.quick_verify() captures text/property/focus signals (and optional image hash) to confirm post-action change; used after AX/vision execution (src/harness/verification.py).
+- UI state recovery: ensure_home_state() sends ESC, closes dialogs, and repeatedly clicks detected back buttons until home landmarks appear; automatically run between tasks and before planner execution (src/harness/ui_state_manager.py).
+- Logging: HarnessLogger streams each execution to runs/run_<timestamp>/all_logs.jsonl plus summary.json; matcher and VLM debug logs live under experiments/; FullExecutionTraceLogger captures tier-level traces (src/harness/logger.py, src/harness/full_execution_trace_logger.py).
+- CLI: python -m src.harness.main --apps Notepad --output-dir runs [--no-cache] [--no-vision] [--dry-run] [--max-tasks N]; use --list-apps to see available apps and --discover to crawl caches before execution (src/harness/main.py).
+- Safety: prober and planner avoid destructive actions (blacklists in src/automation/prober.py); keyboard fallbacks are limited to menu navigation; vision fallback runs only after cache/AX fail unless disabled.
+- Adding apps/tasks: define exe/title regex and task list in config; crawl with --discover to seed cache; review .cache/<app>.json and experiments/crawl_logs for coverage.
+- Expected environment: Windows with UIA access; dependencies include pywinauto, pyautogui, python-dotenv, Pillow, google-generativeai or huggingface_hub for vision, imagehash optional for verification.
+- Outputs: execution artifacts stored under runs/, discovery/crawl outputs under experiments/, caches under .cache/; vision screenshots saved to experiments/run_<run_id>/.
+- Quick recipe: set GEMINI_API_KEY or HF_TOKEN in .env, run python -m src.harness.main --apps Notepad, inspect runs/run_<id>/console.log and all_logs.jsonl, iterate by updating tasks/config or cache via --discover.

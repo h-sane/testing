@@ -1,0 +1,175 @@
+{
+  "generated_at": "2026-04-19T13:36:42",
+  "totals": {
+    "configured_apps": 11,
+    "exe_present": 9,
+    "static_ready": 8
+  },
+  "apps": [
+    {
+      "app_name": "Notepad",
+      "exe": "C:\\Windows\\notepad.exe",
+      "exe_exists": true,
+      "tasks_count": 20,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\notepad.json",
+        "cache_exists": true,
+        "elements_count": 468,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "Calculator",
+      "exe": "C:\\Windows\\System32\\calc.exe",
+      "exe_exists": true,
+      "tasks_count": 20,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\calculator.json",
+        "cache_exists": true,
+        "elements_count": 80,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "Chrome",
+      "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "exe_exists": true,
+      "tasks_count": 15,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\chrome.json",
+        "cache_exists": true,
+        "elements_count": 477,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "VSCode",
+      "exe": "C:\\Users\\husai\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+      "exe_exists": true,
+      "tasks_count": 15,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\vscode.json",
+        "cache_exists": true,
+        "elements_count": 9,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "Windsurf",
+      "exe": "C:\\Users\\husai\\AppData\\Local\\Programs\\Windsurf\\Windsurf.exe",
+      "exe_exists": true,
+      "tasks_count": 12,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\windsurf.json",
+        "cache_exists": true,
+        "elements_count": 4674,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "WhatsApp",
+      "exe": "C:\\Users\\husai\\AppData\\Local\\WhatsApp\\WhatsApp.exe",
+      "exe_exists": false,
+      "tasks_count": 10,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\whatsapp.json",
+        "cache_exists": false,
+        "elements_count": 0,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": false
+    },
+    {
+      "app_name": "Spotify",
+      "exe": "C:\\Users\\husai\\AppData\\Roaming\\Spotify\\Spotify.exe",
+      "exe_exists": true,
+      "tasks_count": 15,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\spotify.json",
+        "cache_exists": true,
+        "elements_count": 1691,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "Zoom",
+      "exe": "C:\\Users\\husai\\AppData\\Roaming\\Zoom\\bin\\Zoom.exe",
+      "exe_exists": true,
+      "tasks_count": 10,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\zoom.json",
+        "cache_exists": false,
+        "elements_count": 0,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": false
+    },
+    {
+      "app_name": "Excel",
+      "exe": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
+      "exe_exists": true,
+      "tasks_count": 15,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\excel.json",
+        "cache_exists": true,
+        "elements_count": 304,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    },
+    {
+      "app_name": "Telegram",
+      "exe": "C:\\Users\\husai\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe",
+      "exe_exists": false,
+      "tasks_count": 10,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\telegram.json",
+        "cache_exists": false,
+        "elements_count": 0,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": false
+    },
+    {
+      "app_name": "Brave",
+      "exe": "C:\\Users\\husai\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "exe_exists": true,
+      "tasks_count": 13,
+      "cache": {
+        "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\brave.json",
+        "cache_exists": true,
+        "elements_count": 516,
+        "broken_exposure_paths": 0,
+        "orphan_parent_refs": 0,
+        "parse_error": ""
+      },
+      "static_ready": true
+    }
+  ]
+}

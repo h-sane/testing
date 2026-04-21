@@ -184,6 +184,50 @@ def _has_home_landmarks(descendants: list) -> bool:
     return False
 
 
+def _has_back_button(descendants: list) -> bool:
+    """Quick check whether a back-navigation button is visible.
+
+    A visible Back button is the strongest universal signal that the app
+    is NOT in its home state (it is on a sub-page).  Even if other home
+    landmarks like TabControl exist, the presence of a Back button means
+    we must navigate back first.
+    """
+    for elem in descendants:
+        ctype = _elem_prop(elem, "control_type").lower()
+        if ctype and ctype not in _BACK_CONTROL_TYPES:
+            continue
+        aid = _elem_prop(elem, "automation_id")
+        if aid and _matches_any(aid, _BACK_AID_PATTERNS):
+            return True
+        cls = _elem_prop(elem, "class_name")
+        if cls and _matches_any(cls, _BACK_CLASSNAME_PATTERNS):
+            return True
+        name = _elem_prop(elem, "name")
+        if name:
+            n_lower = name.lower().strip()
+            if n_lower in ("back", "go back", "\u2190", "\U0001f519",
+                           "navigate back", "\u8fd4\u56de", "previous"):
+                return True
+            if n_lower.startswith("back") and len(n_lower) < 15:
+                return True
+    return False
+
+
+def _is_truly_home(descendants: list) -> bool:
+    """Combined home-state check: landmarks present AND no Back button.
+
+    Win11 apps (e.g. Notepad Settings page) can show TabControl and
+    MenuItem elements even on sub-pages.  The Back button is the
+    universal indicator that the user has navigated away from the
+    primary view.
+    """
+    if not _has_home_landmarks(descendants):
+        return False
+    if _has_back_button(descendants):
+        return False          # sub-page — must navigate back
+    return True
+
+
 def _has_dialog(descendants: list) -> bool:
     """Check if a modal dialog is open."""
     for elem in descendants:
@@ -259,12 +303,16 @@ def ensure_home_state(
 
     # Quick check — maybe ESC was enough
     descendants = _safe_descendants(window)
-    if _has_home_landmarks(descendants):
+    if _is_truly_home(descendants):
         result["recovered"] = True
         result["home_landmarks_found"] = True
         if verbose:
             print(f"{tag} Home state confirmed after ESC ({len(descendants)} elements)")
         return result
+    elif _has_home_landmarks(descendants) and _has_back_button(descendants):
+        if verbose:
+            print(f"{tag} Landmarks present but Back button detected — sub-page, "
+                  f"continuing to Stage 3 ({len(descendants)} elements)")
 
     # ------------------------------------------------------------------
     # Stage 2: Dialog dismissal
@@ -277,7 +325,7 @@ def ensure_home_state(
             time.sleep(0.3)
             result["stages_used"].append("DIALOG_DISMISS")
             descendants = _safe_descendants(window)
-            if _has_home_landmarks(descendants):
+            if _is_truly_home(descendants):
                 result["recovered"] = True
                 result["home_landmarks_found"] = True
                 if verbose:
@@ -293,6 +341,9 @@ def ensure_home_state(
     back_clicks = 0
     if verbose:
         print(f"{tag} Stage 3: Back-button navigation scan")
+
+    prev_count = len(_safe_descendants(window))
+    stale_rounds = 0          # consecutive clicks with no tree change
 
     while back_clicks < max_back_attempts:
         descendants = _safe_descendants(window)
@@ -313,10 +364,24 @@ def ensure_home_state(
 
             # Re-scan after click
             descendants = _safe_descendants(window)
-            if _has_home_landmarks(descendants):
+            cur_count = len(descendants)
+
+            # Detect stale clicks (no meaningful tree change)
+            if abs(cur_count - prev_count) < 3:
+                stale_rounds += 1
+                if stale_rounds >= 3:
+                    if verbose:
+                        print(f"{tag} Back clicks not changing tree "
+                              f"({cur_count} elements) — aborting Stage 3")
+                    break
+            else:
+                stale_rounds = 0
+            prev_count = cur_count
+
+            if _is_truly_home(descendants):
                 if verbose:
                     print(f"{tag} Home state restored after {back_clicks} Back click(s) "
-                          f"({len(descendants)} elements)")
+                          f"({cur_count} elements)")
                 result["recovered"] = True
                 result["home_landmarks_found"] = True
                 result["back_clicks"] = back_clicks
@@ -336,14 +401,16 @@ def ensure_home_state(
     # ------------------------------------------------------------------
     descendants = _safe_descendants(window)
     result["home_landmarks_found"] = _has_home_landmarks(descendants)
-    result["recovered"] = result["home_landmarks_found"]
+    result["recovered"] = _is_truly_home(descendants)
 
     if verbose:
         if result["recovered"]:
             print(f"{tag} Stage 4: Home state CONFIRMED ({len(descendants)} elements)")
         else:
+            has_back = _has_back_button(descendants)
+            reason = "Back button still visible" if has_back else "no home landmarks"
             print(f"{tag} Stage 4: Home state NOT confirmed "
-                  f"({len(descendants)} elements). Proceeding anyway.")
+                  f"({len(descendants)} elements, {reason}). Proceeding anyway.")
 
     # Log to trace logger if available
     if trace_logger:

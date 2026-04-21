@@ -12,7 +12,7 @@ import os
 from src.automation import fingerprint
 
 
-MAX_DEPTH = 12  # Support deep trees (Excel ribbon ~8 levels, dialogs ~10)
+MAX_DEPTH = 25  # Deep enough for Chromium/Electron apps (~12 levels of Pane nesting + content)
 MAX_NAME_LEN = 512  # Truncate extremely long names
 
 

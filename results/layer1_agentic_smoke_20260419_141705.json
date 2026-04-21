@@ -1,0 +1,211 @@
+[
+  {
+    "app_name": "Notepad",
+    "command": "File",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 16103,
+    "replan_rounds_used": 0,
+    "used_macro_plan": false,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "CLICK",
+          "target": "File"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "CACHE_PLANNER",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 4762
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "app_name": "Calculator",
+    "command": "click One",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 11736,
+    "replan_rounds_used": 0,
+    "used_macro_plan": false,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "CLICK",
+          "target": "One"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "CACHE_PLANNER",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 6278
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "app_name": "Chrome",
+    "command": "open new tab",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 10221,
+    "replan_rounds_used": 0,
+    "used_macro_plan": true,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "HOTKEY",
+          "keys": "ctrl+t"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "HOTKEY",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 10221
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "success": false,
+    "app_name": "Windsurf",
+    "command": "open file menu",
+    "error": "Could not start/connect to Windsurf"
+  },
+  {
+    "app_name": "Spotify",
+    "command": "open home",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 460672,
+    "replan_rounds_used": 0,
+    "used_macro_plan": false,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "CLICK",
+          "target": "Home button"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "AX",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 437612
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "app_name": "Zoom",
+    "command": "join meeting",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 38663,
+    "replan_rounds_used": 0,
+    "used_macro_plan": false,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "CLICK",
+          "target": "Join button"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "AX",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 29813
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "app_name": "Excel",
+    "command": "open file menu",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 112375,
+    "replan_rounds_used": 0,
+    "used_macro_plan": false,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "CLICK",
+          "target": "File tab"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "AX",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 106177
+      }
+    ],
+    "protected_app": false
+  },
+  {
+    "app_name": "Brave",
+    "command": "open new tab",
+    "success": true,
+    "done_reason": "Execution finished with DONE action",
+    "error": "",
+    "total_ms": 2628,
+    "replan_rounds_used": 0,
+    "used_macro_plan": true,
+    "used_vision": false,
+    "steps": [
+      {
+        "step_index": 1,
+        "action": {
+          "action_type": "HOTKEY",
+          "keys": "ctrl+t"
+        },
+        "attempt": 1,
+        "replan_round": 0,
+        "success": true,
+        "execution_method": "HOTKEY",
+        "execution_error": "",
+        "verification_success": true,
+        "verification_signal": "text_changed",
+        "latency_ms": 2628
+      }
+    ],
+    "protected_app": false
+  }
+]

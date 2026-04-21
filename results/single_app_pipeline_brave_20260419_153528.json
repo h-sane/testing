@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-04-19T15:35:28",
+  "app_name": "Brave",
+  "discovery": {
+    "discovered": 0,
+    "error": "",
+    "probe_log": ""
+  },
+  "cache_analysis": {
+    "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\brave.json",
+    "cache_exists": true,
+    "elements_count": 516,
+    "elements_with_exposure_path": 450,
+    "max_exposure_path_length": 15,
+    "avg_exposure_path_length": 6.756,
+    "broken_exposure_paths": 0,
+    "orphan_parent_refs": 0,
+    "task_match_threshold": 0.65,
+    "task_match_hits": 9,
+    "task_match_total": 13,
+    "task_match_ratio": 0.6923,
+    "parse_error": ""
+  },
+  "execution": {
+    "output_dir": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\runs\\single_app_targeted_quick",
+    "run_dir": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\runs\\single_app_targeted_quick\\run_20260419_153508",
+    "summary": {
+      "run_id": "20260419_153508",
+      "started_at": "2026-04-19T10:05:08.031129Z",
+      "ended_at": "2026-04-19T10:05:28.205392Z",
+      "total_tasks": 1,
+      "cache_hits": 1,
+      "ax_successes": 0,
+      "vision_successes": 0,
+      "failures": 0,
+      "apps_tested": [
+        "Brave"
+      ]
+    },
+    "use_vision": false,
+    "max_tasks": 1,
+    "skipped": false
+  },
+  "capability_profile": {
+    "app_name": "Brave",
+    "path_coverage_ratio": 0.8721,
+    "task_match_ratio": 0.6923,
+    "elements_count": 516,
+    "elements_with_exposure_path": 450,
+    "broken_exposure_paths": 0,
+    "orphan_parent_refs": 0,
+    "discovery_new_elements": 0,
+    "last_run_failures": 0,
+    "last_run_cache_hits": 1,
+    "last_run_ax_successes": 0,
+    "last_run_vision_successes": 0,
+    "profile_saved": true
+  }
+}

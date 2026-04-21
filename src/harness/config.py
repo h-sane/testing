@@ -4,7 +4,7 @@ Application and task configuration for the hybrid GUI automation harness.
 Defines target apps, executable paths, and tasks to execute.
 Includes numeric normalization for calculator-style tasks.
 """
-
+import json
 import os
 import re
 from dotenv import load_dotenv
@@ -15,6 +15,10 @@ load_dotenv()
 # VALIDATION CHECK
 if not os.getenv("GEMINI_API_KEY") and not os.getenv("HF_TOKEN"):
     print("[CONFIG WARNING] No VLM API keys detected in environment.")
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+USER_CONFIG_DIR = os.path.join(PROJECT_ROOT, ".config")
+USER_APPS_PATH = os.path.join(USER_CONFIG_DIR, "user_apps.json")
 
 # =============================================================================
 # KEYBOARD FALLBACK MAPPINGS
@@ -32,6 +36,12 @@ KEYBOARD_FALLBACKS = {
     "Calculator": {},
     "Chrome": {},
     "VSCode": {
+        "file": "%F",
+        "edit": "%E",
+        "view": "%V",
+        "help": "%H",
+    },
+    "Windsurf": {
         "file": "%F",
         "edit": "%E",
         "view": "%V",
@@ -60,13 +70,19 @@ APPS = {
         "exe": r"C:\Users\husai\AppData\Local\Programs\Microsoft VS Code\Code.exe",
         "title_re": ".*Visual Studio Code.*"
     },
+    "Windsurf": {
+        "exe": r"C:\Users\husai\AppData\Local\Programs\Windsurf\Windsurf.exe",
+        "title_re": ".*- Windsurf$",
+        "electron": True
+    },
     "WhatsApp": {
         "exe": r"C:\Users\husai\AppData\Local\WhatsApp\WhatsApp.exe",
         "title_re": ".*WhatsApp.*"
     },
     "Spotify": {
         "exe": r"C:\Users\husai\AppData\Roaming\Spotify\Spotify.exe",
-        "title_re": ".*Spotify.*"
+        "title_re": "^Spotify.*",
+        "electron": True
     },
     "Zoom": {
         "exe": r"C:\Users\husai\AppData\Roaming\Zoom\bin\Zoom.exe",
@@ -96,7 +112,6 @@ TASKS = {
         "File",
         "Edit",
         "View",
-        "Settings",
         "New tab",
         "Open",
         "Save",
@@ -112,7 +127,8 @@ TASKS = {
         "Select all",
         "Time/Date",
         "Word wrap",
-        "Add New Tab"
+        "Add New Tab",
+        "Settings",
     ],
     "Calculator": [
         # Using actual Windows Calculator button names
@@ -171,6 +187,20 @@ TASKS = {
         "open extensions",
         "toggle sidebar"
     ],
+    "Windsurf": [
+        "open file menu",
+        "open edit menu",
+        "open view menu",
+        "toggle sidebar",
+        "open command palette",
+        "new file",
+        "open folder",
+        "save file",
+        "save all",
+        "open extensions",
+        "open settings",
+        "toggle terminal"
+    ],
     "WhatsApp": [
         "open new chat",
         "open settings",
@@ -184,20 +214,20 @@ TASKS = {
         "open status"
     ],
     "Spotify": [
+        "open home",
+        "open search",
+        "open library",
+        "open queue",
         "play",
         "pause",
         "next track",
         "previous track",
+        "like song",
         "shuffle",
         "repeat",
         "volume up",
         "volume down",
         "mute",
-        "open search",
-        "open library",
-        "open home",
-        "open queue",
-        "like song",
         "open settings"
     ],
     "Zoom": [
@@ -257,6 +287,118 @@ TASKS = {
         "open private window"
     ]
 }
+
+
+def _load_user_apps_config() -> dict:
+    """Load user-registered app overrides from disk."""
+    if not os.path.exists(USER_APPS_PATH):
+        return {"apps": {}, "tasks": {}, "keyboard_fallbacks": {}}
+
+    try:
+        with open(USER_APPS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {"apps": {}, "tasks": {}, "keyboard_fallbacks": {}}
+        return {
+            "apps": data.get("apps", {}) if isinstance(data.get("apps", {}), dict) else {},
+            "tasks": data.get("tasks", {}) if isinstance(data.get("tasks", {}), dict) else {},
+            "keyboard_fallbacks": data.get("keyboard_fallbacks", {}) if isinstance(data.get("keyboard_fallbacks", {}), dict) else {},
+        }
+    except Exception as e:
+        print(f"[CONFIG WARNING] Failed to read user app config: {e}")
+        return {"apps": {}, "tasks": {}, "keyboard_fallbacks": {}}
+
+
+def _save_user_apps_config(data: dict) -> bool:
+    """Persist user app overrides to disk."""
+    try:
+        os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+        with open(USER_APPS_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[CONFIG WARNING] Failed to save user app config: {e}")
+        return False
+
+
+def _apply_user_overrides() -> None:
+    """Merge user-registered apps/tasks into in-memory config maps."""
+    user = _load_user_apps_config()
+
+    for app_name, app_cfg in user.get("apps", {}).items():
+        if isinstance(app_cfg, dict):
+            APPS[app_name] = app_cfg
+
+    for app_name, task_list in user.get("tasks", {}).items():
+        if isinstance(task_list, list):
+            TASKS[app_name] = task_list
+
+    for app_name, fallback_map in user.get("keyboard_fallbacks", {}).items():
+        if isinstance(fallback_map, dict):
+            KEYBOARD_FALLBACKS[app_name] = fallback_map
+
+
+def register_app(
+    app_name: str,
+    exe: str,
+    title_re: str,
+    tasks: list | None = None,
+    keyboard_fallbacks: dict | None = None,
+    electron: bool = False,
+    persist: bool = True,
+) -> bool:
+    """
+    Register or update an app entry.
+
+    This updates in-memory APPS/TASKS maps immediately and optionally
+    persists user-defined entries to .config/user_apps.json.
+    """
+    if not app_name or not isinstance(app_name, str):
+        return False
+
+    app_name = app_name.strip()
+    if not app_name:
+        return False
+
+    app_cfg = {
+        "exe": exe,
+        "title_re": title_re,
+    }
+    if electron:
+        app_cfg["electron"] = True
+
+    APPS[app_name] = app_cfg
+
+    if tasks is not None:
+        TASKS[app_name] = list(tasks)
+    elif app_name not in TASKS:
+        TASKS[app_name] = []
+
+    if keyboard_fallbacks is not None:
+        KEYBOARD_FALLBACKS[app_name] = dict(keyboard_fallbacks)
+    elif app_name not in KEYBOARD_FALLBACKS:
+        KEYBOARD_FALLBACKS[app_name] = {}
+
+    if not persist:
+        return True
+
+    user = _load_user_apps_config()
+    user.setdefault("apps", {})[app_name] = app_cfg
+    user.setdefault("tasks", {})[app_name] = TASKS.get(app_name, [])
+
+    if app_name in KEYBOARD_FALLBACKS:
+        user.setdefault("keyboard_fallbacks", {})[app_name] = KEYBOARD_FALLBACKS.get(app_name, {})
+
+    return _save_user_apps_config(user)
+
+
+def list_user_registered_apps() -> list:
+    """Return only user-registered app names from persisted config."""
+    user = _load_user_apps_config()
+    return sorted(user.get("apps", {}).keys())
+
+
+_apply_user_overrides()
 
 # =============================================================================
 # UTILITIES

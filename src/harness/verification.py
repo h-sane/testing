@@ -16,6 +16,8 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.automation import fingerprint
 
+_VERIFY_MAX_DESCENDANTS = max(100, int(os.getenv("SARA_VERIFY_MAX_DESCENDANTS", "500") or "500"))
+
 @dataclass
 class VerificationResult:
     """Structured result of verification check."""
@@ -52,8 +54,8 @@ class VerificationEngine:
         try:
             state["title"] = window.window_text() or ""
             
-            # Use top level children for quick count and props to avoid 30s scans
-            descendants = window.descendants()[:200] # Limit depth for verification speed
+            # Use a bounded descendant scan that still captures modal/dialog controls.
+            descendants = window.descendants()[:_VERIFY_MAX_DESCENDANTS]
             state["element_count"] = len(descendants)
             
             for idx, elem in enumerate(descendants):
@@ -78,19 +80,44 @@ class VerificationEngine:
                         "sibling_index": idx % 100
                     }
                     fp = fingerprint.compute_fingerprint(node_partial, "")
+
+                    # Capture Properties first so editable fields can be tracked even when window_text is empty.
+                    props = {}
+                    if hasattr(elem, 'get_value'):
+                        try:
+                            value = elem.get_value()
+                            if value not in (None, ""):
+                                props["value"] = str(value)
+                        except:
+                            pass
+
+                    if "value" not in props and hasattr(elem, 'iface_value'):
+                        try:
+                            iface_value = getattr(elem, 'iface_value')
+                            current_value = getattr(iface_value, 'CurrentValue', None)
+                            if current_value not in (None, ""):
+                                props["value"] = str(current_value)
+                        except:
+                            pass
+
+                    if "value" not in props and hasattr(elem, 'legacy_properties'):
+                        try:
+                            legacy = elem.legacy_properties() or {}
+                            legacy_value = legacy.get("Value")
+                            if legacy_value not in (None, ""):
+                                props["value"] = str(legacy_value)
+                        except:
+                            pass
                     
                     # Capture Focus
                     if hasattr(elem, 'has_keyboard_focus') and elem.has_keyboard_focus():
                         state["focused"] = fp
                     
                     # Capture Text
-                    state["text_map"][fp] = name
-                    
-                    # Capture Properties
-                    props = {}
-                    if hasattr(elem, 'get_value'):
-                        try: props["value"] = elem.get_value()
-                        except: pass
+                    display_name = name
+                    if not display_name and props.get("value"):
+                        display_name = props["value"]
+                    state["text_map"][fp] = display_name
                     
                     patterns = [] # Heuristic patterns
                     if hasattr(elem, 'iface_toggle'): patterns.append("toggle")
@@ -106,8 +133,9 @@ class VerificationEngine:
                 except:
                     continue
                     
-            # Compute a quick tree hash of top-level
-            state["tree_hash"] = str(hash(tuple(state["text_map"].keys())))
+            # Include both structure and visible value snapshots in tree hash.
+            tree_signature = tuple(sorted((fp, state["text_map"].get(fp, "")) for fp in state["text_map"]))
+            state["tree_hash"] = str(hash(tree_signature))
             
         except Exception as e:
             print(f"[verification] Error capturing state: {e}")
@@ -149,7 +177,7 @@ class VerificationEngine:
         Execute layered verification.
         """
         start_time = time.time()
-        time.sleep(0.5) # Wait for UI to settle
+        time.sleep(0.35) # Wait briefly for UI to settle
         
         post_state = self.capture_full_state(window)
         
@@ -194,6 +222,9 @@ class VerificationEngine:
     def _compare_properties(self, pre: Dict, post: Dict) -> bool:
         for fp, props in pre.items():
             if fp in post and post[fp] != props:
+                return True
+        for fp in post:
+            if fp not in pre:
                 return True
         return False
 

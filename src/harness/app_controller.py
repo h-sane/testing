@@ -2,15 +2,17 @@
 """
 Application lifecycle management for the hybrid GUI automation harness.
 Handles safe launching, connecting, and killing of applications.
+Includes Electron/Chromium-specific launch and accessibility warm-up.
 """
 
 import time
+import subprocess
 import psutil
 import os
 import signal
 from typing import Optional, Tuple
 
-from pywinauto import Application
+from pywinauto import Application, Desktop
 from pywinauto.findwindows import ElementNotFoundError
 
 
@@ -21,10 +23,11 @@ from pywinauto.findwindows import ElementNotFoundError
 class AppController:
     """Manages application lifecycle."""
     
-    def __init__(self, app_name: str, exe_path: str, title_re: str):
+    def __init__(self, app_name: str, exe_path: str, title_re: str, electron: bool = False):
         self.app_name = app_name
         self.exe_path = exe_path
         self.title_re = title_re
+        self.electron = electron
         self.app: Optional[Application] = None
         self.window = None
     
@@ -35,14 +38,20 @@ class AppController:
         try:
             for proc in psutil.process_iter(['name', 'exe']):
                 try:
-                    # Check by name regex or raw name if regex matches simple string
-                    # Simple check: name in proc.name
-                    if self.app_name.lower() in proc.info['name'].lower():
+                    proc_name = (proc.info['name'] or '').lower()
+                    proc_exe = (proc.info['exe'] or '').lower()
+                    
+                    # Skip unrelated java processes that live inside app extension dirs
+                    if 'java' in proc_name:
+                        continue
+                    
+                    # Match by app name in process name
+                    if self.app_name.lower() in proc_name:
                         proc.kill()
                         count += 1
                         continue
                         
-                    # Detailed check if exe_path is known
+                    # Match by exact exe path
                     if self.exe_path and proc.info['exe']:
                         if os.path.normpath(proc.info['exe']) == os.path.normpath(self.exe_path):
                             proc.kill()
@@ -53,12 +62,17 @@ class AppController:
             print(f"[app_controller] Cleanup error: {e}")
             
         if count > 0:
-            time.sleep(1)
+            time.sleep(2)
             print(f"[app_controller] Cleaned up {count} orphaned processes.")
 
     def start(self, timeout: int = 10, wait_ready: int = 3) -> bool:
         """
         Start the application.
+        
+        For Electron/Chromium apps, uses PowerShell Start-Process since
+        subprocess.Popen often fails to spawn the full process tree.
+        After launch, triggers Chromium's lazy accessibility tree build
+        by querying descendants, then waits for the tree to populate.
         
         Args:
             timeout: Max seconds to wait for window
@@ -67,9 +81,12 @@ class AppController:
         Returns:
             True if started successfully
         """
-        print(f"[app_controller] Starting {self.app_name}...")
+        print(f"[app_controller] Starting {self.app_name} (electron={self.electron})...")
         
         try:
+            if self.electron:
+                return self._start_electron(timeout=timeout, wait_ready=wait_ready)
+            
             self.app = Application(backend="uia").start(self.exe_path)
             
             # Wait for CPU to settle
@@ -91,6 +108,113 @@ class AppController:
         except Exception as e:
             print(f"[app_controller] Error starting {self.app_name}: {e}")
             return False
+    
+    def _start_electron(self, timeout: int = 30, wait_ready: int = 5) -> bool:
+        """
+        Launch an Electron/Chromium app via PowerShell Start-Process.
+        
+        Python's subprocess.Popen often fails for Electron apps because the
+        launcher process exits immediately and spawns a separate process tree.
+        PowerShell's Start-Process correctly handles this.
+        
+        After the window appears, performs an accessibility tree warm-up:
+        queries .descendants() to trigger Chromium's lazy a11y bridge,
+        then waits for the tree to fully populate.
+        """
+        import re
+        
+        # Launch via PowerShell Start-Process
+        ps_cmd = f'Start-Process -FilePath "{self.exe_path}"'
+        print(f"[app_controller] Electron launch via PowerShell...")
+        subprocess.Popen(
+            ['powershell', '-NoProfile', '-Command', ps_cmd],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        
+        # Give PowerShell + app startup a head start
+        time.sleep(5)
+        
+        # Wait for the window to appear on Desktop
+        window = None
+        title_pattern = re.compile(self.title_re)
+        
+        for elapsed in range(0, timeout * 2, 2):
+            time.sleep(2)
+            
+            for w in Desktop(backend="uia").windows():
+                try:
+                    title = w.window_text()
+                    pid = w.process_id()
+                    # Match title but exclude explorer.exe false positives
+                    if title and title_pattern.match(title):
+                        try:
+                            proc_name = psutil.Process(pid).name().lower()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            proc_name = ""
+                        if proc_name == "explorer.exe":
+                            continue  # Skip File Explorer windows
+                        window = w
+                        break
+                except Exception:
+                    continue
+            
+            if window:
+                break
+            print(f"[app_controller] Waiting for {self.app_name} window... ({elapsed+2}s)")
+        
+        if not window:
+            print(f"[app_controller] {self.app_name} window not found after {timeout}s")
+            return False
+        
+        title = window.window_text()
+        pid = window.process_id()
+        print(f"[app_controller] Window found: '{title[:50]}' PID={pid}")
+        
+        # Connect pywinauto Application to this PID
+        self.app = Application(backend="uia").connect(process=pid, timeout=10)
+        self.window = self.app.top_window()
+        
+        # Accessibility warm-up: trigger Chromium's lazy a11y tree build
+        self._warmup_accessibility()
+        
+        return True
+    
+    def _warmup_accessibility(self):
+        """
+        Trigger Chromium's lazy accessibility tree build and wait for it to stabilize.
+        
+        Chromium-based apps don't populate their UIA tree until an automation
+        client first queries it. The initial query triggers the build, but the
+        tree populates asynchronously over several seconds. This method polls
+        until the tree stops growing, ensuring Phase 1 captures all elements.
+        """
+        if not self.window:
+            return
+        
+        print(f"[app_controller] Warming up accessibility tree...")
+        try:
+            prev_count = 0
+            stable_ticks = 0
+            max_warmup = 30  # seconds
+            
+            for tick in range(0, max_warmup, 2):
+                count = len(self.window.descendants())
+                delta = count - prev_count
+                print(f"[app_controller]   [{tick}s] {count} descendants (delta={delta})")
+                
+                if delta == 0 and count > 20:
+                    stable_ticks += 1
+                    if stable_ticks >= 2:  # Stable for 4+ seconds
+                        break
+                else:
+                    stable_ticks = 0
+                
+                prev_count = count
+                time.sleep(2)
+            
+            print(f"[app_controller] Accessibility warm-up complete ({count} elements)")
+        except Exception as e:
+            print(f"[app_controller] Warm-up error (continuing): {e}")
     
     def connect(self, timeout: int = 5) -> bool:
         """
@@ -121,9 +245,11 @@ class AppController:
     def start_or_connect(self, timeout: int = 10) -> bool:
         """
         Always cleanup first, then start or connect.
+        Uses a longer timeout for Electron apps.
         """
         self.pre_start_cleanup()
-        return self.start(timeout=timeout)
+        effective_timeout = max(timeout, 30) if self.electron else timeout
+        return self.start(timeout=effective_timeout)
     
     def close(self, timeout: int = 5):
         """
@@ -313,7 +439,7 @@ def create_controller(app_name: str, config: dict) -> AppController:
     
     Args:
         app_name: Application name
-        config: Dict with 'exe' and 'title_re' keys
+        config: Dict with 'exe', 'title_re', and optional 'electron' keys
     
     Returns:
         AppController instance
@@ -321,5 +447,6 @@ def create_controller(app_name: str, config: dict) -> AppController:
     return AppController(
         app_name=app_name,
         exe_path=config.get("exe", ""),
-        title_re=config.get("title_re", f".*{app_name}.*")
+        title_re=config.get("title_re", f".*{app_name}.*"),
+        electron=config.get("electron", False)
     )

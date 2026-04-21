@@ -2,14 +2,14 @@
 """
 Production-quality UI crawler for automation tree discovery.
 Three-phase BFS architecture with universal content boundary detection:
-  Phase 1: Static snapshot (capture all visible elements)
-  Phase 2: Interactive BFS probing (expand menus, probe tabs, discover popups)
-  Phase 3: Dialog probing (invoke safe menu items to discover dialogs)
+    Phase 1: Static snapshot (capture all visible elements)
+    Phase 2: Interactive BFS probing (expand menus, probe tabs, discover popups)
+    Phase 3: Dialog probing (invoke safe menu items to discover dialogs)
 
 Content boundary detection (universal, no per-app config):
-  - Document/DataGrid/Table boundaries: stop recursion into rendered content
-  - Homogeneous sibling explosion: detect data lists (bookmarks, history)
-  - Popup content filter: skip browser tabs/extension popups
+    - Document/DataGrid/Table boundaries: stop recursion into rendered content
+    - Homogeneous sibling explosion: detect data lists (bookmarks, history)
+    - Popup content filter: skip browser tabs/extension popups
 
 General-purpose: works on any UIA-compatible Windows application.
 """
@@ -67,6 +67,9 @@ CONTAINER_TYPES = {
 # These work universally across all apps (browsers, Office, etc.)
 CONTENT_BOUNDARY_TYPES = {"Document", "DataGrid", "Table"}
 
+# Apps whose main UI lives inside a Document (Electron/SPA); skip boundary for them.
+DOCUMENT_BOUNDARY_EXEMPT_APPS = {"Windsurf", "Spotify"}
+
 # Homogeneous sibling explosion detection:
 # When expanding an element reveals many children of the same type,
 # it's a data list (bookmarks, history, file list) — not app controls.
@@ -83,6 +86,14 @@ PROBE_ACTIONS = [
     ("SelectionItemPattern", "select"),
 ]
 
+# Restrict probing to safer chrome-like controls. Avoid blind clicking buttons.
+PROBE_ELIGIBLE_TYPES = {
+    "MenuBar", "Menu", "MenuItem",
+    "Tab", "TabItem",
+    "Tree", "TreeItem",
+    "SplitButton",
+}
+
 LOG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "experiments", "crawl_logs"
@@ -95,10 +106,10 @@ LOG_DIR = os.path.join(
 
 class UIProber:
     """
-    Two-phase BFS crawler for complete automation tree discovery.
-    
+    Three-phase crawler for automation tree discovery.
     Phase 1: Static snapshot — build tree from window, store all nodes.
     Phase 2: Interactive BFS — expand/invoke elements, discover hidden children.
+    Phase 3: Dialog probing — invoke safe menu items to surface dialogs.
     """
     
     def __init__(self, max_depth=12, max_time=120, blacklist=None, probe_dialogs=True):
@@ -106,6 +117,7 @@ class UIProber:
         self.max_time = max_time
         self.blacklist = blacklist or DEFAULT_BLACKLIST
         self.probe_dialogs = probe_dialogs
+        self.app_name = ""
         
         # Runtime state
         self.session = None          # CacheSession (batch I/O)
@@ -126,6 +138,15 @@ class UIProber:
         # Logging
         os.makedirs(LOG_DIR, exist_ok=True)
         self.log_path = os.path.join(LOG_DIR, f"probe_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+    def _get_probe_action(self, control_type: str, patterns: list):
+        """Map available patterns to a safe probe action for whitelisted control types."""
+        if not patterns or control_type not in PROBE_ELIGIBLE_TYPES:
+            return None
+        for pattern, action in PROBE_ACTIONS:
+            if pattern in patterns:
+                return action
+        return None
     
     # -------------------------------------------------------------------------
     # LOGGING
@@ -170,6 +191,8 @@ class UIProber:
         but their children are NOT recursed into — they contain
         ephemeral user content (web pages, spreadsheet cells, etc.).
         """
+        if control_type == "Document" and self.app_name in DOCUMENT_BOUNDARY_EXEMPT_APPS:
+            return False
         return control_type in CONTENT_BOUNDARY_TYPES
     
     def _is_data_explosion(self, new_children):
@@ -234,6 +257,7 @@ class UIProber:
         self.log(f"=== Starting probe for '{app_name}' ===")
         self.log(f"Config: max_depth={self.max_depth}, max_time={self.max_time}s")
         
+        self.app_name = app_name
         self.root_window = window
         self.target_pid = window.process_id()
         self.start_time = time.time()
@@ -347,16 +371,17 @@ class UIProber:
             if not is_boundary:
                 # Check if this element should be probed interactively
                 patterns = node.get("patterns", [])
-                if any(p in EXPANDABLE_PATTERNS for p in patterns):
-                    if self.is_safe(node.get("name", "")):
-                        self.probe_queue.append({
-                            "fingerprint": fp,
-                            "name": node.get("name", "unnamed"),
-                            "control_type": node.get("control_type", ""),
-                            "automation_id": node.get("automation_id", ""),
-                            "depth": depth,
-                            "parent_exposure": []  # How to *get to* this element
-                        })
+                action = self._get_probe_action(control_type, patterns)
+                if action and self.is_safe(node.get("name", "")):
+                    self.probe_queue.append({
+                        "fingerprint": fp,
+                        "name": node.get("name", "unnamed"),
+                        "control_type": control_type,
+                        "automation_id": node.get("automation_id", ""),
+                        "depth": depth,
+                        "parent_exposure": [],  # How to *get to* this element
+                        "action": action,
+                    })
         elif fp:
             self.stored_fps.add(fp)
         
@@ -420,9 +445,11 @@ class UIProber:
                 self.stats["errors"] += 1
                 continue
             
+            action = item.get("action", "expand")
+
             # 4. Expand the element
-            if not self._take_action(target_elem, "expand"):
-                self.log(f"Expand failed on '{name}'", "WARN")
+            if not self._take_action(target_elem, action):
+                self.log(f"{action.title()} failed on '{name}'", "WARN")
                 self.stats["errors"] += 1
                 continue
             
@@ -435,7 +462,7 @@ class UIProber:
             before_count = self.stats["discovered"]
             
             # The exposure path for children of THIS element
-            child_exposure = list(parent_exposure) + [{"fingerprint": fp, "action": "expand"}]
+            child_exposure = list(parent_exposure) + [{"fingerprint": fp, "action": action}]
             
             # 6a. Re-snapshot the main window
             new_children = self._capture_new_elements(app_name, child_exposure)
@@ -832,18 +859,18 @@ class UIProber:
                 
                 # Do NOT enqueue boundary elements for deeper probing
                 if not is_boundary:
-                    # Enqueue expandables for deeper probing
                     patterns = node.get("patterns", [])
-                    if any(p in EXPANDABLE_PATTERNS for p in patterns):
-                        if self.is_safe(node.get("name", "")):
-                            self.probe_queue.append({
-                                "fingerprint": fp,
-                                "name": node.get("name", "unnamed"),
-                                "control_type": node.get("control_type", ""),
-                                "automation_id": node.get("automation_id", ""),
-                                "depth": depth,
-                                "parent_exposure": exposure_path
-                            })
+                    action = self._get_probe_action(control_type, patterns)
+                    if action and self.is_safe(node.get("name", "")):
+                        self.probe_queue.append({
+                            "fingerprint": fp,
+                            "name": node.get("name", "unnamed"),
+                            "control_type": control_type,
+                            "automation_id": node.get("automation_id", ""),
+                            "depth": depth,
+                            "parent_exposure": exposure_path,
+                            "action": action,
+                        })
         elif fp:
             self.stored_fps.add(fp)
         

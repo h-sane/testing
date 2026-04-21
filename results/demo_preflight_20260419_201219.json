@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-04-19T20:12:14.010375Z",
+  "checks": {
+    "imports": {
+      "ok": true,
+      "details": {
+        "sara.host_agent": "ok",
+        "sara.execution_agent": "ok",
+        "sara.llm_service": "ok",
+        "sara.privacy_router": "ok",
+        "sara.knowledge_base_manager": "ok"
+      }
+    },
+    "llm": {
+      "ok": true,
+      "details": {
+        "gemini_keys": 3,
+        "gemini_available": 3,
+        "claude_keys": 3,
+        "claude_available": 3,
+        "nvidia_keys": 1,
+        "nvidia_available": 1,
+        "bedrock_keys": 1,
+        "bedrock_available": 1
+      }
+    },
+    "ui": {
+      "ok": true,
+      "details": "PyQt5 available"
+    },
+    "voice": {
+      "ok": true,
+      "details": {
+        "mode": "VOICE",
+        "wake_word": "hey sara",
+        "wake_engine": "porcupine",
+        "wake_word_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\Hey-SARA_en_windows_v3_0_0.ppn",
+        "wake_word_file_exists": true,
+        "stt_backend": "Deepgram (Google fallback)",
+        "stt_model": "nova-2",
+        "tts_backend": "Deepgram Aura (pyttsx3 fallback)",
+        "tts_model": "aura-2-thalia-en",
+        "tts_sample_rate": 48000,
+        "last_tts_backend": "none",
+        "last_tts_error": "",
+        "deepgram_configured": true,
+        "picovoice_configured": true,
+        "listening": false,
+        "thread_alive": false
+      }
+    },
+    "memory_graph": {
+      "ok": false,
+      "details": {
+        "enabled": true,
+        "ready": false,
+        "uri": true,
+        "database": "neo4j",
+        "user_id": "local-user",
+        "last_error": "Couldn't connect to 127.0.0.1:7687 (resolved to ('127.0.0.1:7687',)):\nFailed to establish connection to ResolvedIPv4Address(('127.0.0.1', 7687)) (reason [WinError 10061] No connection could be made because the target machine actively refused it)"
+      }
+    },
+    "apps": {
+      "ok": true,
+      "details": {
+        "Notepad": {
+          "exe": "C:\\Windows\\notepad.exe",
+          "exe_exists": true,
+          "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\notepad.json",
+          "cache_exists": true
+        },
+        "Brave": {
+          "exe": "C:\\Users\\husai\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+          "exe_exists": true,
+          "cache_path": "C:\\Users\\husai\\Desktop\\CODES\\Project\\testing\\.cache\\brave.json",
+          "cache_exists": true
+        }
+      }
+    }
+  },
+  "ok": false
+}

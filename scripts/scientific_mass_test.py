@@ -215,10 +215,18 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Scientific Mass Test Runner")
     parser.add_argument("--apps", nargs="+", default=["Notepad"])
+    parser.add_argument(
+        "--include-vscode",
+        action="store_true",
+        help="Include VSCode in test apps (disabled by default for safety)",
+    )
     parser.add_argument("--no-vision", action="store_true")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--max-tasks", type=int, default=None)
     args = parser.parse_args()
+
+    if not args.include_vscode:
+        args.apps = [a for a in args.apps if a != "VSCode"]
     
     run_id = generate_run_id()
     run_dir = PROJECT_ROOT / "runs" / run_id

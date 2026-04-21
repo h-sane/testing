@@ -458,7 +458,7 @@ def run_discovery(
                     print(f"[discovery] Success: Found {new_elements} new elements for {app_name}")
                     
                     # 3. Contraction (Reset UI)
-                    crawler.contraction(window)
+                    crawler.reset_ui(window)
                 else:
                     print(f"[discovery] Error: Could not get window for {app_name}")
             else:
